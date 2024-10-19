@@ -7,5 +7,5 @@ import ru.belous.MySecondTestAppSpringBoot.exception.ValidationFailedException;
 
 @Service
 public interface ValidationService {
-    void isValid(BindingResult bindingResult) throws ValidationFailedException, UnsupportedCodeException;;
+    void isValid(BindingResult bindingResult) throws ValidationFailedException, UnsupportedCodeException;
 }
