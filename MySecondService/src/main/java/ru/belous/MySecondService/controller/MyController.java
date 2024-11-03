@@ -1,4 +1,4 @@
-package ru.belous.MySecondTestAppSpringBoot.controller;
+package ru.belous.MySecondService.controller;
 
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,14 +10,14 @@ import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
-import ru.belous.MySecondTestAppSpringBoot.exception.UnsupportedCodeException;
-import ru.belous.MySecondTestAppSpringBoot.exception.ValidationFailedException;
-import ru.belous.MySecondTestAppSpringBoot.model.*;
-import ru.belous.MySecondTestAppSpringBoot.service.ModifyRequestService;
-import ru.belous.MySecondTestAppSpringBoot.service.ModifyResponseService;
-import ru.belous.MySecondTestAppSpringBoot.service.ValidationService;
-import ru.belous.MySecondTestAppSpringBoot.util.DateTimeUtil;
+import ru.belous.MySecondService.exception.ValidationFailedException;
+import ru.belous.MySecondService.exception.UnsupportedCodeException;
+import ru.belous.MySecondService.model.*;
+import ru.belous.MySecondService.service.ModifyResponseService;
+import ru.belous.MySecondService.service.ValidationService;
+import ru.belous.MySecondService.util.DateTimeUtil;
 
+import java.text.ParseException;
 import java.util.Date;
 
 @Slf4j
@@ -27,16 +27,13 @@ public class MyController {
     private final ValidationService validationService;
     private final ModifyResponseService modifyResponseService;
 
-    private final ModifyRequestService modifyRequestService;
-
     @Autowired
     public MyController(ValidationService validationService,
-                        @Qualifier("modifyCompositeRequestService") ModifyRequestService modifyRequestService,
-                        @Qualifier("ModifySystemTimeResponseService") ModifyResponseService modifyResponseService) {
+                        @Qualifier("ModifySystemTimeResponseService")
+                        ModifyResponseService modifyResponseService) {
 
         this.validationService = validationService;
         this.modifyResponseService = modifyResponseService;
-        this.modifyRequestService = modifyRequestService;
     }
     @PostMapping(value = "/feedback")
     public ResponseEntity<Response> feedback(@RequestBody @Valid Request request, BindingResult bindingResult) {
@@ -89,7 +86,17 @@ public class MyController {
 
             return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
         }
-        modifyRequestService.modify(request);
+
+
+        Date requestDate = null;
+        try {
+            requestDate = DateTimeUtil.getCustomFormat().parse(request.getSystemTime());
+        } catch (ParseException e) {
+            throw new RuntimeException(e);
+        }
+        Date now = new Date();
+        log.info("elapsed time: " + ((now.getTime() - requestDate.getTime()) / 1000.0) + " seconds");
+
         return ResponseEntity.ok(modifyResponseService.modify(response));
     }
 }
