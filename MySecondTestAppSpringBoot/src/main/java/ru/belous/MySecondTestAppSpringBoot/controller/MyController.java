@@ -10,14 +10,13 @@ import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
-import ru.belous.MySecondTestAppSpringBoot.exception.UnsupportedCodeException;
-import ru.belous.MySecondTestAppSpringBoot.exception.ValidationFailedException;
+import ru.belous.MySecondTestAppSpringBoot.exception.*;
 import ru.belous.MySecondTestAppSpringBoot.model.*;
-import ru.belous.MySecondTestAppSpringBoot.service.ModifyRequestService;
-import ru.belous.MySecondTestAppSpringBoot.service.ModifyResponseService;
-import ru.belous.MySecondTestAppSpringBoot.service.ValidationService;
+import ru.belous.MySecondTestAppSpringBoot.service.*;
 import ru.belous.MySecondTestAppSpringBoot.util.DateTimeUtil;
 
+import java.time.Year;
+import java.util.Calendar;
 import java.util.Date;
 
 @Slf4j
@@ -28,15 +27,20 @@ public class MyController {
     private final ModifyResponseService modifyResponseService;
 
     private final ModifyRequestService modifyRequestService;
-
+    private final AnnualBonusService annualBonusService;
+    private final QuarterlyBonusService quarterlyBonusService;
     @Autowired
     public MyController(ValidationService validationService,
-                        @Qualifier("modifyCompositeRequestService") ModifyRequestService modifyRequestService,
-                        @Qualifier("ModifySystemTimeResponseService") ModifyResponseService modifyResponseService) {
+                        @Qualifier("modifySystemTimeRequestService") ModifyRequestService modifyRequestService,
+                        @Qualifier("ModifySystemTimeResponseService") ModifyResponseService modifyResponseService,
+                        AnnualBonusService annualBonusService,
+                        QuarterlyBonusService quarterlyBonusService) {
 
         this.validationService = validationService;
         this.modifyResponseService = modifyResponseService;
         this.modifyRequestService = modifyRequestService;
+        this.annualBonusService = annualBonusService;
+        this.quarterlyBonusService = quarterlyBonusService;
     }
     @PostMapping(value = "/feedback")
     public ResponseEntity<Response> feedback(@RequestBody @Valid Request request, BindingResult bindingResult) {
@@ -63,33 +67,35 @@ public class MyController {
             validationService.isValid(bindingResult);
 
         } catch (ValidationFailedException e) {
-            response.setCode(Codes.FAILED);
-            response.setErrorCode(ErrorCodes.VALIDATION_EXCEPTION);
-            response.setErrorMessage(ErrorMessages.VALIDATION);
-
-            log.info("add response error data: {}", response);
-
-            return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
-
+            return generateErrorResponse(response, ErrorCodes.VALIDATION_EXCEPTION, ErrorMessages.VALIDATION, HttpStatus.BAD_REQUEST);
         } catch (UnsupportedCodeException e) {
-            response.setCode(Codes.FAILED);
-            response.setErrorCode(ErrorCodes.UNSUPPORTED_EXCEPTION);
-            response.setErrorMessage(ErrorMessages.UNSUPPORTED);
-
-            log.info("add response error data: {}", response);
-
-            return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
-
+            return generateErrorResponse(response, ErrorCodes.UNSUPPORTED_EXCEPTION, ErrorMessages.UNSUPPORTED, HttpStatus.BAD_REQUEST);
         } catch (Exception e) {
-            response.setCode(Codes.FAILED);
-            response.setErrorCode(ErrorCodes.UNSUPPORTED_EXCEPTION);
-            response.setErrorMessage(ErrorMessages.UNKNOWN);
+            return generateErrorResponse(response, ErrorCodes.UNKNOWN_EXCEPTION, ErrorMessages.UNKNOWN, HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+        response.setAnnualBonus(annualBonusService.calculate(request.getPosition(), request.getSalary(),
+                request.getBonus(), request.getWorkDays(), Year.now().getValue()));
 
-            log.info("add response error data: {}", response);
-
-            return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
+        if (request.isManager()) {
+            response.setQuarterlyBonus(quarterlyBonusService.calculate(true, request.getPosition(),
+                    request.getSalary(), request.getBonus(), request.getWorkDays(), Year.now().getValue(), getCurrentQuarter()));
         }
         modifyRequestService.modify(request);
         return ResponseEntity.ok(modifyResponseService.modify(response));
+    }
+    private ResponseEntity<Response> generateErrorResponse(Response response, ErrorCodes code, ErrorMessages message,
+                                                           HttpStatus status) {
+        response.setCode(Codes.FAILED);
+        response.setErrorCode(code);
+        response.setErrorMessage(message);
+        log.info("response error: {}", response);
+        return new ResponseEntity<>(response, status);
+    }
+
+    private int getCurrentQuarter() {
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTime(new Date());
+        int monthValue = calendar.get(Calendar.MONTH);
+        return monthValue / 3;
     }
 }
